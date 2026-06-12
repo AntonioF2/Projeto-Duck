@@ -17,6 +17,11 @@ const tipoConfig = {
   lojista:  { label: 'Lojista',  classe: 'tipo-lojista' },
 }
 
+const statusOptions = Object.entries(statusConfig).map(([value, config]) => ({
+  value,
+  label: config.label,
+}))
+
 const navItems = [
   { id: 'visao-geral', label: 'Visão Geral' },
   { id: 'pedidos', label: 'Pedidos' },
@@ -177,7 +182,22 @@ function VisaoGeral({ resumo, entregas }) {
   )
 }
 
-function Pedidos({ entregas }) {
+function Pedidos({ entregas, tipo, onStatusPedidoAlterado }) {
+  const [statusSalvando, setStatusSalvando] = useState(null)
+
+  const handleStatusChange = async (pedido, novoStatus) => {
+    if (novoStatus === pedido.status) return
+
+    setStatusSalvando(pedido.id)
+    try {
+      await onStatusPedidoAlterado(pedido.id, novoStatus)
+    } catch (err) {
+      alert('Erro ao atualizar status: ' + (err.data?.mensagem || err.message))
+    } finally {
+      setStatusSalvando(null)
+    }
+  }
+
   return (
     <div className="dash-section">
       <h2 className="dash-section-title">Pedidos</h2>
@@ -204,7 +224,23 @@ function Pedidos({ entregas }) {
                   <td>{p.regiao_nome}</td>
                   <td>{p.prioridade}</td>
                   <td>
-                    <span className={`badge ${sv.classe}`}>{sv.label}</span>
+                    {tipo === 'operador' ? (
+                      <select
+                        className={`status-select ${sv.classe}`}
+                        value={p.status}
+                        onChange={e => handleStatusChange(p, e.target.value)}
+                        disabled={statusSalvando === p.id}
+                        aria-label={`Status do pedido ${p.id}`}
+                      >
+                        {statusOptions.map(option => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <span className={`badge ${sv.classe}`}>{sv.label}</span>
+                    )}
                   </td>
                   <td>R$ {Number(p.custo || 0).toFixed(2)}</td>
                   <td className="td-data">{formatarData(p.data_pedido)}</td>
@@ -565,10 +601,219 @@ function Usuarios({ usuarios, onUsuariosAlterados, tipo }) {
   )
 }
 
-function Lojas({ lojas }) {
+function ModalLoja({ isOpen, modo, loja, lojistas, onClose, onSave, carregando }) {
+  const [form, setForm] = useState({
+    nome: loja?.nome || '',
+    endereco: loja?.endereco || '',
+    telefone: loja?.telefone || '',
+    usuario_id: loja?.usuario_id || '',
+  })
+  const [erros, setErros] = useState({})
+
+  useEffect(() => {
+    if (loja && modo === 'editar') {
+      setForm({
+        nome: loja.nome || '',
+        endereco: loja.endereco || '',
+        telefone: loja.telefone || '',
+        usuario_id: loja.usuario_id || '',
+      })
+    } else {
+      setForm({ nome: '', endereco: '', telefone: '', usuario_id: '' })
+    }
+    setErros({})
+  }, [loja, modo, isOpen])
+
+  const validar = () => {
+    const novosErros = {}
+    if (!form.nome.trim()) novosErros.nome = 'Nome da loja é obrigatório'
+    if (!form.usuario_id) novosErros.usuario_id = 'Selecione um lojista'
+    setErros(novosErros)
+    return Object.keys(novosErros).length === 0
+  }
+
+  const handleSave = () => {
+    if (!validar()) return
+    onSave({ ...form, usuario_id: Number(form.usuario_id) }, modo)
+  }
+
+  if (!isOpen) return null
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content" onClick={e => e.stopPropagation()}>
+        <div className="modal-header">
+          <h3>{modo === 'criar' ? 'Criar Nova Loja' : 'Editar Loja'}</h3>
+          <button className="modal-close-btn" onClick={onClose}>
+            <IcClose />
+          </button>
+        </div>
+
+        <div className="modal-body">
+          <div className="form-group">
+            <label>Nome da Loja</label>
+            <input
+              type="text"
+              value={form.nome}
+              onChange={e => setForm({ ...form, nome: e.target.value })}
+              placeholder="Nome da loja"
+              disabled={carregando}
+            />
+            {erros.nome && <span className="error-text">{erros.nome}</span>}
+          </div>
+
+          <div className="form-group">
+            <label>Endereço</label>
+            <input
+              type="text"
+              value={form.endereco}
+              onChange={e => setForm({ ...form, endereco: e.target.value })}
+              placeholder="Endereço da loja"
+              disabled={carregando}
+            />
+          </div>
+
+          <div className="form-group">
+            <label>Telefone</label>
+            <input
+              type="text"
+              value={form.telefone}
+              onChange={e => setForm({ ...form, telefone: e.target.value })}
+              placeholder="Telefone da loja"
+              disabled={carregando}
+            />
+          </div>
+
+          <div className="form-group">
+            <label>Lojista</label>
+            <select
+              value={form.usuario_id}
+              onChange={e => setForm({ ...form, usuario_id: e.target.value })}
+              disabled={carregando || lojistas.length === 0}
+            >
+              <option value="">Selecione um lojista</option>
+              {lojistas.map(lojista => (
+                <option key={lojista.id} value={lojista.id}>
+                  {lojista.nome} ({lojista.email})
+                </option>
+              ))}
+            </select>
+            {lojistas.length === 0 && (
+              <span className="error-text">Cadastre um usuário do tipo lojista antes de criar uma loja.</span>
+            )}
+            {erros.usuario_id && <span className="error-text">{erros.usuario_id}</span>}
+          </div>
+        </div>
+
+        <div className="modal-footer">
+          <button className="btn-cancel" onClick={onClose} disabled={carregando}>
+            Cancelar
+          </button>
+          <button className="btn-save" onClick={handleSave} disabled={carregando || lojistas.length === 0}>
+            {carregando ? 'Salvando...' : modo === 'criar' ? 'Criar' : 'Atualizar'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function Lojas({ lojas, usuarios, onLojasAlteradas, tipo }) {
+  const [listaLojas, setListaLojas] = useState(lojas)
+  const [modalAberto, setModalAberto] = useState(false)
+  const [modoModal, setModoModal] = useState('criar')
+  const [lojaSelecionada, setLojaSelecionada] = useState(null)
+  const [carregandoModal, setCarregandoModal] = useState(false)
+  const [carregandoAcao, setCarregandoAcao] = useState(null)
+  const [mensagem, setMensagem] = useState('')
+
+  const podeGerenciar = tipo === 'admin'
+  const lojistas = useMemo(
+    () => usuarios.filter(usuario => usuario.tipo === 'lojista'),
+    [usuarios]
+  )
+
+  useEffect(() => {
+    setListaLojas(lojas)
+  }, [lojas])
+
+  const abrirCriar = () => {
+    setModoModal('criar')
+    setLojaSelecionada(null)
+    setModalAberto(true)
+  }
+
+  const abrirEditar = (loja) => {
+    setModoModal('editar')
+    setLojaSelecionada(loja)
+    setModalAberto(true)
+  }
+
+  const fecharModal = () => {
+    setModalAberto(false)
+    setMensagem('')
+  }
+
+  const handleSalvarLoja = async (form, modo) => {
+    setCarregandoModal(true)
+    try {
+      if (modo === 'criar') {
+        const res = await api.post('/lojas', form)
+        setListaLojas([...listaLojas, res.loja || { ...form, id: Date.now() }])
+        setMensagem('Loja criada com sucesso!')
+        setTimeout(() => fecharModal(), 1500)
+      } else {
+        await api.put(`/lojas/${lojaSelecionada.id}`, form)
+        setListaLojas(listaLojas.map(l => l.id === lojaSelecionada.id ? { ...l, ...form } : l))
+        setMensagem('Loja atualizada com sucesso!')
+        setTimeout(() => fecharModal(), 1500)
+      }
+      onLojasAlteradas()
+    } catch (err) {
+      setMensagem('Erro: ' + (err.data?.mensagem || err.message))
+    } finally {
+      setCarregandoModal(false)
+    }
+  }
+
+  const handleExcluir = async (loja) => {
+    if (!window.confirm(`Tem certeza que deseja excluir a loja ${loja.nome}?`)) return
+
+    setCarregandoAcao(loja.id)
+    try {
+      await api.delete(`/lojas/${loja.id}`)
+      setListaLojas(listaLojas.filter(l => l.id !== loja.id))
+      onLojasAlteradas()
+    } catch (err) {
+      alert('Erro ao excluir: ' + (err.data?.mensagem || err.message))
+    } finally {
+      setCarregandoAcao(null)
+    }
+  }
+
   return (
     <div className="dash-section">
-      <h2 className="dash-section-title">Lojas</h2>
+      <div className="dash-section-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <h2 className="dash-section-title">Lojas</h2>
+        {podeGerenciar && (
+          <button className="btn-novo" onClick={abrirCriar}>
+            <IcPlus /> Nova Loja
+          </button>
+        )}
+      </div>
+
+      {mensagem && (
+        <div style={{
+          marginBottom: 16,
+          padding: 12,
+          borderRadius: 4,
+          backgroundColor: mensagem.startsWith('Erro') ? '#ffebee' : '#e8f5e9',
+          color: mensagem.startsWith('Erro') ? '#c62828' : '#2e7d32',
+        }}>
+          {mensagem}
+        </div>
+      )}
+
       <div className="dash-table-box">
         <table className="dash-table">
           <thead>
@@ -578,28 +823,60 @@ function Lojas({ lojas }) {
               <th>Endereço</th>
               <th>Telefone</th>
               <th>Lojista</th>
+              {podeGerenciar && <th>Ações</th>}
             </tr>
           </thead>
           <tbody>
-            {lojas.map(l => (
+            {listaLojas.map(l => (
               <tr key={l.id}>
                 <td className="td-id">#{l.id}</td>
                 <td>{l.nome}</td>
                 <td>{l.endereco}</td>
                 <td>{l.telefone}</td>
                 <td>{l.lojista || '-'}</td>
+                {podeGerenciar && (
+                  <td className="td-acoes">
+                    <button
+                      className="btn-action btn-edit"
+                      onClick={() => abrirEditar(l)}
+                      title="Editar"
+                      disabled={carregandoAcao === l.id}
+                    >
+                      <IcEdit />
+                    </button>
+                    <button
+                      className="btn-action btn-delete"
+                      onClick={() => handleExcluir(l)}
+                      title="Excluir"
+                      disabled={carregandoAcao === l.id}
+                    >
+                      <IcDelete />
+                    </button>
+                  </td>
+                )}
               </tr>
             ))}
-            {lojas.length === 0 && (
-              <tr><td colSpan="5" style={{ textAlign: 'center', padding: 24, color: '#888' }}>Nenhuma loja.</td></tr>
+            {listaLojas.length === 0 && (
+              <tr><td colSpan={podeGerenciar ? 6 : 5} style={{ textAlign: 'center', padding: 24, color: '#888' }}>Nenhuma loja.</td></tr>
             )}
           </tbody>
         </table>
       </div>
+
+      {podeGerenciar && (
+        <ModalLoja
+          isOpen={modalAberto}
+          modo={modoModal}
+          loja={lojaSelecionada}
+          lojistas={lojistas}
+          onClose={fecharModal}
+          onSave={handleSalvarLoja}
+          carregando={carregandoModal}
+        />
+      )}
     </div>
   )
 }
-
 function Dashboard() {
   const navigate = useNavigate()
   const location = useLocation()
@@ -660,6 +937,13 @@ function Dashboard() {
     navigate('/')
   }
 
+  const atualizarStatusPedido = async (pedidoId, status) => {
+    const entregaAtualizada = await api.patch(`/entregas/${pedidoId}`, { status })
+    setEntregas(entregasAtuais => entregasAtuais.map(entrega => (
+      entrega.id === pedidoId ? { ...entrega, ...entregaAtualizada } : entrega
+    )))
+  }
+
   const renderConteudo = () => {
     if (carregando) {
       return <div className="dash-section"><p style={{ padding: 24 }}>Carregando...</p></div>
@@ -674,9 +958,9 @@ function Dashboard() {
       )
     }
     if (secao === 'visao-geral') return <VisaoGeral resumo={resumo} entregas={entregas} />
-    if (secao === 'pedidos') return <Pedidos entregas={entregas} />
+    if (secao === 'pedidos') return <Pedidos entregas={entregas} tipo={tipo} onStatusPedidoAlterado={atualizarStatusPedido} />
     if (secao === 'usuarios') return <Usuarios usuarios={usuarios} tipo={tipo} onUsuariosAlterados={carregarDados} />
-    if (secao === 'lojas') return <Lojas lojas={lojas} />
+    if (secao === 'lojas') return <Lojas lojas={lojas} usuarios={usuarios} tipo={tipo} onLojasAlteradas={carregarDados} />
   }
 
   return (
