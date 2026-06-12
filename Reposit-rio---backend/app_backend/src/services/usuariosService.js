@@ -1,5 +1,20 @@
 const db = require('../database/db')
 
+const CAMPOS_PUBLICOS_USUARIO = 'id, nome, email, senha, tipo'
+
+const listar = async ({ tipo } = {}) => {
+  if (tipo) {
+    const [rows] = await db.query(
+      `SELECT ${CAMPOS_PUBLICOS_USUARIO} FROM usuarios WHERE tipo = ?`,
+      [tipo]
+    )
+    return rows
+  }
+
+  const [rows] = await db.query(`SELECT ${CAMPOS_PUBLICOS_USUARIO} FROM usuarios`)
+  return rows
+}
+
 const criar = async ({ nome, email, senha, tipo }) => {
   const [existente] = await db.query(
     'SELECT id FROM usuarios WHERE email = ?',
@@ -45,4 +60,4 @@ const excluir = async (id) => {
   await db.query('DELETE FROM usuarios WHERE id = ?', [id])
 }
 
-module.exports = { criar, atualizar, excluir }
+module.exports = { listar, criar, atualizar, excluir }

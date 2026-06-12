@@ -36,6 +36,18 @@ beforeEach(() => {
       if (url.includes('/entregas/10') && options.method === 'PATCH') {
         return ok({ ...entregasMock[0], status: 'enviado' })
       }
+      if (url.includes('/lojas') && options.method === 'POST') {
+        return ok({
+          mensagem: 'Loja criada com sucesso',
+          loja: {
+            id: 2,
+            nome: 'Loja Nova',
+            endereco: 'Rua Nova, 123',
+            telefone: '11988887777',
+            usuario_id: 4,
+          },
+        })
+      }
       if (url.includes('/entregas')) return ok(entregasMock)
       if (url.includes('/usuarios')) return ok(usuariosMock)
       if (url.includes('/lojas')) return ok(lojasMock)
@@ -177,6 +189,72 @@ describe('Dashboard (admin)', () => {
     expect(screen.queryByRole('button', { name: /Novo/i })).not.toBeInTheDocument()
     expect(screen.queryByTitle('Editar')).not.toBeInTheDocument()
     expect(screen.queryByTitle('Excluir')).not.toBeInTheDocument()
+  })
+
+  it('permite ao admin criar loja selecionando um lojista existente', async () => {
+    const user = userEvent.setup()
+
+    render(
+      <MemoryRouter>
+        <Dashboard />
+      </MemoryRouter>
+    )
+
+    await waitFor(() => {
+      expect(screen.getByText(/Pedidos Recentes/i)).toBeInTheDocument()
+    })
+
+    await user.click(screen.getByRole('button', { name: /Lojas/i }))
+    await user.click(screen.getByRole('button', { name: /Nova Loja/i }))
+
+    await user.type(screen.getByPlaceholderText(/Nome da loja/i), 'Loja Nova')
+    await user.type(screen.getByPlaceholderText(/Endere/i), 'Rua Nova, 123')
+    await user.type(screen.getByPlaceholderText(/Telefone da loja/i), '11988887777')
+    await user.selectOptions(screen.getByRole('combobox'), '4')
+    await user.click(screen.getByRole('button', { name: /^Criar$/i }))
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining('/lojas'),
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({
+            nome: 'Loja Nova',
+            endereco: 'Rua Nova, 123',
+            telefone: '11988887777',
+            usuario_id: 4,
+          }),
+        })
+      )
+    })
+  })
+
+  it('permite ao operador alterar o status do pedido', async () => {
+    sessionStorage.setItem('tipo', 'operador')
+    const user = userEvent.setup()
+
+    render(
+      <MemoryRouter>
+        <Dashboard />
+      </MemoryRouter>
+    )
+
+    await waitFor(() => {
+      expect(screen.getByText(/Pedidos Recentes/i)).toBeInTheDocument()
+    })
+
+    await user.click(screen.getByRole('button', { name: /Pedidos/i }))
+    await user.selectOptions(screen.getByLabelText(/Status do pedido 10/i), 'enviado')
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining('/entregas/10'),
+        expect.objectContaining({
+          method: 'PATCH',
+          body: JSON.stringify({ status: 'enviado' }),
+        })
+      )
+    })
   })
 
 })

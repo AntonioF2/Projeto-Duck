@@ -633,7 +633,7 @@ function ModalLoja({ isOpen, modo, loja, lojistas, onClose, onSave, carregando }
 
   const validar = () => {
     const novosErros = {}
-    if (!form.nome.trim()) novosErros.nome = 'Nome é obrigatório'
+    if (!form.nome.trim()) novosErros.nome = 'Nome da loja é obrigatório'
     if (!form.usuario_id) novosErros.usuario_id = 'Selecione um lojista'
     setErros(novosErros)
     return Object.keys(novosErros).length === 0
@@ -734,11 +734,11 @@ function Lojas({ lojas, usuarios, onLojasAlteradas, tipo }) {
   const [carregandoAcao, setCarregandoAcao] = useState(null)
   const [mensagem, setMensagem] = useState('')
 
+  const podeGerenciar = tipo === 'admin'
   const lojistas = useMemo(
     () => usuarios.filter(usuario => usuario.tipo === 'lojista'),
     [usuarios]
   )
-  const podeGerenciar = tipo === 'admin'
 
   useEffect(() => {
     setListaLojas(lojas)
@@ -767,17 +767,17 @@ function Lojas({ lojas, usuarios, onLojasAlteradas, tipo }) {
       if (modo === 'criar') {
         const res = await api.post('/lojas', form)
         setListaLojas([...listaLojas, res.loja || { ...form, id: Date.now() }])
-        setMensagem('✓ Loja criada com sucesso!')
+        setMensagem('Loja criada com sucesso!')
         setTimeout(() => fecharModal(), 1500)
       } else {
         await api.put(`/lojas/${lojaSelecionada.id}`, form)
         setListaLojas(listaLojas.map(l => l.id === lojaSelecionada.id ? { ...l, ...form } : l))
-        setMensagem('✓ Loja atualizada com sucesso!')
+        setMensagem('Loja atualizada com sucesso!')
         setTimeout(() => fecharModal(), 1500)
       }
       onLojasAlteradas()
     } catch (err) {
-      setMensagem('✗ Erro: ' + (err.data?.mensagem || err.message))
+      setMensagem('Erro: ' + (err.data?.mensagem || err.message))
     } finally {
       setCarregandoModal(false)
     }
@@ -798,17 +798,6 @@ function Lojas({ lojas, usuarios, onLojasAlteradas, tipo }) {
     }
   }
 
-  if (tipo !== 'admin' && tipo !== 'operador') {
-    return (
-      <div className="dash-section">
-        <h2 className="dash-section-title">Lojas</h2>
-        <div style={{ padding: 24, color: '#c62828' }}>
-          Apenas administradores podem gerenciar lojas.
-        </div>
-      </div>
-    )
-  }
-
   return (
     <div className="dash-section">
       <div className="dash-section-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
@@ -825,8 +814,8 @@ function Lojas({ lojas, usuarios, onLojasAlteradas, tipo }) {
           marginBottom: 16,
           padding: 12,
           borderRadius: 4,
-          backgroundColor: mensagem.includes('✓') ? '#e8f5e9' : '#ffebee',
-          color: mensagem.includes('✓') ? '#2e7d32' : '#c62828',
+          backgroundColor: mensagem.startsWith('Erro') ? '#ffebee' : '#e8f5e9',
+          color: mensagem.startsWith('Erro') ? '#c62828' : '#2e7d32',
         }}>
           {mensagem}
         </div>
@@ -853,24 +842,24 @@ function Lojas({ lojas, usuarios, onLojasAlteradas, tipo }) {
                 <td>{l.telefone}</td>
                 <td>{l.lojista || '-'}</td>
                 {podeGerenciar && (
-                <td className="td-acoes">
-                  <button
-                    className="btn-action btn-edit"
-                    onClick={() => abrirEditar(l)}
-                    title="Editar"
-                    disabled={carregandoAcao === l.id}
-                  >
-                    <IcEdit />
-                  </button>
-                  <button
-                    className="btn-action btn-delete"
-                    onClick={() => handleExcluir(l)}
-                    title="Excluir"
-                    disabled={carregandoAcao === l.id}
-                  >
-                    <IcDelete />
-                  </button>
-                </td>
+                  <td className="td-acoes">
+                    <button
+                      className="btn-action btn-edit"
+                      onClick={() => abrirEditar(l)}
+                      title="Editar"
+                      disabled={carregandoAcao === l.id}
+                    >
+                      <IcEdit />
+                    </button>
+                    <button
+                      className="btn-action btn-delete"
+                      onClick={() => handleExcluir(l)}
+                      title="Excluir"
+                      disabled={carregandoAcao === l.id}
+                    >
+                      <IcDelete />
+                    </button>
+                  </td>
                 )}
               </tr>
             ))}
@@ -895,7 +884,6 @@ function Lojas({ lojas, usuarios, onLojasAlteradas, tipo }) {
     </div>
   )
 }
-
 function Dashboard() {
   const navigate = useNavigate()
   const location = useLocation()
