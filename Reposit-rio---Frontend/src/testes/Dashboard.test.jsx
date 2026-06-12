@@ -1,4 +1,5 @@
 import { render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { MemoryRouter } from 'react-router-dom'
 import Dashboard from '../pages/Dashboard'
@@ -61,6 +62,44 @@ describe('Dashboard (admin)', () => {
     expect(screen.getByText(/Total de Pedidos/i)).toBeInTheDocument()
     // Loja mockada aparece na tabela
     expect(screen.getByText(/Empório Central/i)).toBeInTheDocument()
+  })
+
+  it('permite ao admin criar loja selecionando um lojista existente', async () => {
+    const user = userEvent.setup()
+
+    render(
+      <MemoryRouter>
+        <Dashboard />
+      </MemoryRouter>
+    )
+
+    await waitFor(() => {
+      expect(screen.getByText(/Pedidos Recentes/i)).toBeInTheDocument()
+    })
+
+    await user.click(screen.getByRole('button', { name: /Lojas/i }))
+    await user.click(screen.getByRole('button', { name: /Nova Loja/i }))
+
+    await user.type(screen.getByPlaceholderText(/Nome da loja/i), 'Loja Nova')
+    await user.type(screen.getByPlaceholderText(/Endereço da loja/i), 'Rua Nova, 123')
+    await user.type(screen.getByPlaceholderText(/Telefone da loja/i), '11988887777')
+    await user.selectOptions(screen.getByRole('combobox'), '4')
+    await user.click(screen.getByRole('button', { name: /^Criar$/i }))
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining('/lojas'),
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({
+            nome: 'Loja Nova',
+            endereco: 'Rua Nova, 123',
+            telefone: '11988887777',
+            usuario_id: 4,
+          }),
+        })
+      )
+    })
   })
 
 })
