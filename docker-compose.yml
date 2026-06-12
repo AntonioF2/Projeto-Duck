@@ -1,0 +1,63 @@
+version: '3.9'
+
+services:
+  db:
+    image: mysql:8
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: sistema_entregas
+    volumes:
+      - dbdata:/var/lib/mysql
+      - ./Repositorio_Banco_De_Dados/db.sql:/docker-entrypoint-initdb.d/db.sql:ro
+    ports:
+      - "3306:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./Reposit-rio---backend/app_backend
+      dockerfile: Dockerfile
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_USER: root
+      DB_PASS: root
+      DB_NAME: sistema_entregas
+    ports:
+      - "3000:3000"
+
+  seed:
+    build:
+      context: ./Repositorio_Banco_De_Dados
+      dockerfile: Dockerfile
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_USER: root
+      DB_PASS: root
+    command: npm run seed
+
+  frontend:
+    build:
+      context: ./Reposit-rio---Frontend
+      dockerfile: Dockerfile
+    depends_on:
+      - backend
+    environment:
+      VITE_API_URL: "http://localhost:3000"
+    ports:
+      - "5173:5173"
+
+volumes:
+  dbdata:
