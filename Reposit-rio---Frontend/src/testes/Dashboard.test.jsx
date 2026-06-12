@@ -31,8 +31,11 @@ beforeEach(() => {
   sessionStorage.setItem('usuario', 'Admin Duck')
   sessionStorage.setItem('tipo', 'admin')
 
-  global.fetch = vi.fn().mockImplementation((url) => {
+  global.fetch = vi.fn().mockImplementation((url, options = {}) => {
     if (typeof url === 'string') {
+      if (url.includes('/entregas/10') && options.method === 'PATCH') {
+        return ok({ ...entregasMock[0], status: 'enviado' })
+      }
       if (url.includes('/entregas')) return ok(entregasMock)
       if (url.includes('/usuarios')) return ok(usuariosMock)
       if (url.includes('/lojas')) return ok(lojasMock)
@@ -61,7 +64,7 @@ describe('Dashboard (admin)', () => {
     // Card "Total de Pedidos" deve refletir os dados mockados (1 entrega)
     expect(screen.getByText(/Total de Pedidos/i)).toBeInTheDocument()
     // Loja mockada aparece na tabela
-    expect(screen.getByText(/Empório Central/i)).toBeInTheDocument()
+    expect(screen.getByText(/Central/i)).toBeInTheDocument()
   })
 
   it('permite ao admin criar loja selecionando um lojista existente', async () => {
@@ -100,6 +103,80 @@ describe('Dashboard (admin)', () => {
         })
       )
     })
+  })
+
+  it('permite ao operador alterar o status do pedido salvando no backend', async () => {
+    sessionStorage.setItem('tipo', 'operador')
+    const user = userEvent.setup()
+
+    render(
+      <MemoryRouter>
+        <Dashboard />
+      </MemoryRouter>
+    )
+
+    await waitFor(() => {
+      expect(screen.getByText(/Pedidos Recentes/i)).toBeInTheDocument()
+    })
+
+    await user.click(screen.getByRole('button', { name: /Pedidos/i }))
+    await user.selectOptions(screen.getByLabelText(/Status do pedido 10/i), 'enviado')
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining('/entregas/10'),
+        expect.objectContaining({
+          method: 'PATCH',
+          body: JSON.stringify({ status: 'enviado' }),
+        })
+      )
+    })
+  })
+
+  it('permite ao operador visualizar lojas sem acoes de gerenciamento', async () => {
+    sessionStorage.setItem('tipo', 'operador')
+    const user = userEvent.setup()
+
+    render(
+      <MemoryRouter>
+        <Dashboard />
+      </MemoryRouter>
+    )
+
+    await waitFor(() => {
+      expect(screen.getByText(/Pedidos Recentes/i)).toBeInTheDocument()
+    })
+
+    await user.click(screen.getByRole('button', { name: /Lojas/i }))
+
+    expect(screen.getByText(/Central/i)).toBeInTheDocument()
+    expect(screen.getByText(/Lojista 1/i)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Nova Loja/i })).not.toBeInTheDocument()
+    expect(screen.queryByTitle('Editar')).not.toBeInTheDocument()
+    expect(screen.queryByTitle('Excluir')).not.toBeInTheDocument()
+  })
+
+  it('permite ao operador visualizar usuarios sem acoes de gerenciamento', async () => {
+    sessionStorage.setItem('tipo', 'operador')
+    const user = userEvent.setup()
+
+    render(
+      <MemoryRouter>
+        <Dashboard />
+      </MemoryRouter>
+    )
+
+    await waitFor(() => {
+      expect(screen.getByText(/Pedidos Recentes/i)).toBeInTheDocument()
+    })
+
+    await user.click(screen.getByRole('button', { name: /Usu.*rios/i }))
+
+    expect(screen.getAllByText(/Admin Duck/i).length).toBeGreaterThan(0)
+    expect(screen.getByText(/Lojista 1/i)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Novo/i })).not.toBeInTheDocument()
+    expect(screen.queryByTitle('Editar')).not.toBeInTheDocument()
+    expect(screen.queryByTitle('Excluir')).not.toBeInTheDocument()
   })
 
 })

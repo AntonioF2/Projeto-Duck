@@ -17,6 +17,11 @@ const tipoConfig = {
   lojista:  { label: 'Lojista',  classe: 'tipo-lojista' },
 }
 
+const statusOptions = Object.entries(statusConfig).map(([value, config]) => ({
+  value,
+  label: config.label,
+}))
+
 const navItems = [
   { id: 'visao-geral', label: 'Visão Geral' },
   { id: 'pedidos', label: 'Pedidos' },
@@ -177,7 +182,22 @@ function VisaoGeral({ resumo, entregas }) {
   )
 }
 
-function Pedidos({ entregas }) {
+function Pedidos({ entregas, tipo, onStatusPedidoAlterado }) {
+  const [statusSalvando, setStatusSalvando] = useState(null)
+
+  const handleStatusChange = async (pedido, novoStatus) => {
+    if (novoStatus === pedido.status) return
+
+    setStatusSalvando(pedido.id)
+    try {
+      await onStatusPedidoAlterado(pedido.id, novoStatus)
+    } catch (err) {
+      alert('Erro ao atualizar status: ' + (err.data?.mensagem || err.message))
+    } finally {
+      setStatusSalvando(null)
+    }
+  }
+
   return (
     <div className="dash-section">
       <h2 className="dash-section-title">Pedidos</h2>
@@ -204,7 +224,23 @@ function Pedidos({ entregas }) {
                   <td>{p.regiao_nome}</td>
                   <td>{p.prioridade}</td>
                   <td>
-                    <span className={`badge ${sv.classe}`}>{sv.label}</span>
+                    {tipo === 'operador' ? (
+                      <select
+                        className={`status-select ${sv.classe}`}
+                        value={p.status}
+                        onChange={e => handleStatusChange(p, e.target.value)}
+                        disabled={statusSalvando === p.id}
+                        aria-label={`Status do pedido ${p.id}`}
+                      >
+                        {statusOptions.map(option => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <span className={`badge ${sv.classe}`}>{sv.label}</span>
+                    )}
                   </td>
                   <td>R$ {Number(p.custo || 0).toFixed(2)}</td>
                   <td className="td-data">{formatarData(p.data_pedido)}</td>
@@ -408,6 +444,7 @@ function Usuarios({ usuarios, onUsuariosAlterados, tipo }) {
   const [carregandoModal, setCarregandoModal] = useState(false)
   const [carregandoAcao, setCarregandoAcao] = useState(null)
   const [mensagem, setMensagem] = useState('')
+  const podeGerenciar = tipo === 'admin'
 
   useEffect(() => {
     setListaUsuarios(usuarios)
@@ -469,7 +506,7 @@ function Usuarios({ usuarios, onUsuariosAlterados, tipo }) {
   }
 
   // Apenas admin pode gerenciar usuários
-  if (tipo !== 'admin') {
+  if (tipo !== 'admin' && tipo !== 'operador') {
     return (
       <div className="dash-section">
         <h2 className="dash-section-title">Usuários</h2>
@@ -484,12 +521,14 @@ function Usuarios({ usuarios, onUsuariosAlterados, tipo }) {
     <div className="dash-section">
       <div className="dash-section-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <h2 className="dash-section-title">Usuários</h2>
+        {podeGerenciar && (
         <button className="btn-novo" onClick={abrirCriar}>
           <IcPlus /> Novo Usuário
         </button>
+        )}
       </div>
 
-      {mensagem && (
+      {podeGerenciar && mensagem && (
         <div style={{
           marginBottom: 16,
           padding: 12,
@@ -510,7 +549,7 @@ function Usuarios({ usuarios, onUsuariosAlterados, tipo }) {
               <th>E-mail</th>
               <th>Senha</th>
               <th>Tipo</th>
-              <th>Ações</th>
+              {podeGerenciar && <th>Ações</th>}
             </tr>
           </thead>
           <tbody>
@@ -525,6 +564,7 @@ function Usuarios({ usuarios, onUsuariosAlterados, tipo }) {
                   <td>
                     <span className={`badge ${tv.classe}`}>{tv.label}</span>
                   </td>
+                  {podeGerenciar && (
                   <td className="td-acoes">
                     <button
                       className="btn-action btn-edit"
@@ -543,16 +583,18 @@ function Usuarios({ usuarios, onUsuariosAlterados, tipo }) {
                       <IcDelete />
                     </button>
                   </td>
+                  )}
                 </tr>
               )
             })}
             {listaUsuarios.length === 0 && (
-              <tr><td colSpan="6" style={{ textAlign: 'center', padding: 24, color: '#888' }}>Nenhum usuário.</td></tr>
+              <tr><td colSpan={podeGerenciar ? 6 : 5} style={{ textAlign: 'center', padding: 24, color: '#888' }}>Nenhum usuário.</td></tr>
             )}
           </tbody>
         </table>
       </div>
 
+      {podeGerenciar && (
       <ModalUsuario
         isOpen={modalAberto}
         modo={modoModal}
@@ -561,6 +603,7 @@ function Usuarios({ usuarios, onUsuariosAlterados, tipo }) {
         onSave={handleSalvarUsuario}
         carregando={carregandoModal}
       />
+      )}
     </div>
   )
 }
@@ -695,6 +738,7 @@ function Lojas({ lojas, usuarios, onLojasAlteradas, tipo }) {
     () => usuarios.filter(usuario => usuario.tipo === 'lojista'),
     [usuarios]
   )
+  const podeGerenciar = tipo === 'admin'
 
   useEffect(() => {
     setListaLojas(lojas)
@@ -754,7 +798,7 @@ function Lojas({ lojas, usuarios, onLojasAlteradas, tipo }) {
     }
   }
 
-  if (tipo !== 'admin') {
+  if (tipo !== 'admin' && tipo !== 'operador') {
     return (
       <div className="dash-section">
         <h2 className="dash-section-title">Lojas</h2>
@@ -769,9 +813,11 @@ function Lojas({ lojas, usuarios, onLojasAlteradas, tipo }) {
     <div className="dash-section">
       <div className="dash-section-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <h2 className="dash-section-title">Lojas</h2>
-        <button className="btn-novo" onClick={abrirCriar}>
-          <IcPlus /> Nova Loja
-        </button>
+        {podeGerenciar && (
+          <button className="btn-novo" onClick={abrirCriar}>
+            <IcPlus /> Nova Loja
+          </button>
+        )}
       </div>
 
       {mensagem && (
@@ -795,7 +841,7 @@ function Lojas({ lojas, usuarios, onLojasAlteradas, tipo }) {
               <th>Endereço</th>
               <th>Telefone</th>
               <th>Lojista</th>
-              <th>Ações</th>
+              {podeGerenciar && <th>Ações</th>}
             </tr>
           </thead>
           <tbody>
@@ -806,6 +852,7 @@ function Lojas({ lojas, usuarios, onLojasAlteradas, tipo }) {
                 <td>{l.endereco}</td>
                 <td>{l.telefone}</td>
                 <td>{l.lojista || '-'}</td>
+                {podeGerenciar && (
                 <td className="td-acoes">
                   <button
                     className="btn-action btn-edit"
@@ -824,24 +871,27 @@ function Lojas({ lojas, usuarios, onLojasAlteradas, tipo }) {
                     <IcDelete />
                   </button>
                 </td>
+                )}
               </tr>
             ))}
             {listaLojas.length === 0 && (
-              <tr><td colSpan="6" style={{ textAlign: 'center', padding: 24, color: '#888' }}>Nenhuma loja.</td></tr>
+              <tr><td colSpan={podeGerenciar ? 6 : 5} style={{ textAlign: 'center', padding: 24, color: '#888' }}>Nenhuma loja.</td></tr>
             )}
           </tbody>
         </table>
       </div>
 
-      <ModalLoja
-        isOpen={modalAberto}
-        modo={modoModal}
-        loja={lojaSelecionada}
-        lojistas={lojistas}
-        onClose={fecharModal}
-        onSave={handleSalvarLoja}
-        carregando={carregandoModal}
-      />
+      {podeGerenciar && (
+        <ModalLoja
+          isOpen={modalAberto}
+          modo={modoModal}
+          loja={lojaSelecionada}
+          lojistas={lojistas}
+          onClose={fecharModal}
+          onSave={handleSalvarLoja}
+          carregando={carregandoModal}
+        />
+      )}
     </div>
   )
 }
@@ -906,6 +956,13 @@ function Dashboard() {
     navigate('/')
   }
 
+  const atualizarStatusPedido = async (pedidoId, status) => {
+    const entregaAtualizada = await api.patch(`/entregas/${pedidoId}`, { status })
+    setEntregas(entregasAtuais => entregasAtuais.map(entrega => (
+      entrega.id === pedidoId ? { ...entrega, ...entregaAtualizada } : entrega
+    )))
+  }
+
   const renderConteudo = () => {
     if (carregando) {
       return <div className="dash-section"><p style={{ padding: 24 }}>Carregando...</p></div>
@@ -920,7 +977,7 @@ function Dashboard() {
       )
     }
     if (secao === 'visao-geral') return <VisaoGeral resumo={resumo} entregas={entregas} />
-    if (secao === 'pedidos') return <Pedidos entregas={entregas} />
+    if (secao === 'pedidos') return <Pedidos entregas={entregas} tipo={tipo} onStatusPedidoAlterado={atualizarStatusPedido} />
     if (secao === 'usuarios') return <Usuarios usuarios={usuarios} tipo={tipo} onUsuariosAlterados={carregarDados} />
     if (secao === 'lojas') return <Lojas lojas={lojas} usuarios={usuarios} tipo={tipo} onLojasAlteradas={carregarDados} />
   }
