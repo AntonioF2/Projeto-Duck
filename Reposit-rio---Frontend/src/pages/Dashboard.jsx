@@ -444,6 +444,7 @@ function Usuarios({ usuarios, onUsuariosAlterados, tipo }) {
   const [carregandoModal, setCarregandoModal] = useState(false)
   const [carregandoAcao, setCarregandoAcao] = useState(null)
   const [mensagem, setMensagem] = useState('')
+  const podeGerenciar = tipo === 'admin'
 
   useEffect(() => {
     setListaUsuarios(usuarios)
@@ -505,7 +506,7 @@ function Usuarios({ usuarios, onUsuariosAlterados, tipo }) {
   }
 
   // Apenas admin pode gerenciar usuários
-  if (tipo !== 'admin') {
+  if (tipo !== 'admin' && tipo !== 'operador') {
     return (
       <div className="dash-section">
         <h2 className="dash-section-title">Usuários</h2>
@@ -520,12 +521,14 @@ function Usuarios({ usuarios, onUsuariosAlterados, tipo }) {
     <div className="dash-section">
       <div className="dash-section-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <h2 className="dash-section-title">Usuários</h2>
+        {podeGerenciar && (
         <button className="btn-novo" onClick={abrirCriar}>
           <IcPlus /> Novo Usuário
         </button>
+        )}
       </div>
 
-      {mensagem && (
+      {podeGerenciar && mensagem && (
         <div style={{
           marginBottom: 16,
           padding: 12,
@@ -546,7 +549,7 @@ function Usuarios({ usuarios, onUsuariosAlterados, tipo }) {
               <th>E-mail</th>
               <th>Senha</th>
               <th>Tipo</th>
-              <th>Ações</th>
+              {podeGerenciar && <th>Ações</th>}
             </tr>
           </thead>
           <tbody>
@@ -561,6 +564,7 @@ function Usuarios({ usuarios, onUsuariosAlterados, tipo }) {
                   <td>
                     <span className={`badge ${tv.classe}`}>{tv.label}</span>
                   </td>
+                  {podeGerenciar && (
                   <td className="td-acoes">
                     <button
                       className="btn-action btn-edit"
@@ -579,16 +583,18 @@ function Usuarios({ usuarios, onUsuariosAlterados, tipo }) {
                       <IcDelete />
                     </button>
                   </td>
+                  )}
                 </tr>
               )
             })}
             {listaUsuarios.length === 0 && (
-              <tr><td colSpan="6" style={{ textAlign: 'center', padding: 24, color: '#888' }}>Nenhum usuário.</td></tr>
+              <tr><td colSpan={podeGerenciar ? 6 : 5} style={{ textAlign: 'center', padding: 24, color: '#888' }}>Nenhum usuário.</td></tr>
             )}
           </tbody>
         </table>
       </div>
 
+      {podeGerenciar && (
       <ModalUsuario
         isOpen={modalAberto}
         modo={modoModal}
@@ -597,6 +603,7 @@ function Usuarios({ usuarios, onUsuariosAlterados, tipo }) {
         onSave={handleSalvarUsuario}
         carregando={carregandoModal}
       />
+      )}
     </div>
   )
 }
